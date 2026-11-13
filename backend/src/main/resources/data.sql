@@ -1,11 +1,6 @@
 -- Ajuste de compatibilidade caso a coluna usuario_id tenha constraint not null prévia
 ALTER TABLE IF EXISTS atendimentos ALTER COLUMN usuario_id DROP NOT NULL;
 
--- Usuário Padrão do Sistema
-INSERT INTO usuarios (id, nome, email, senha, role, ativo)
-VALUES ('00000000-0000-0000-0000-000000000001', 'Atendente CEAM', 'atendente@ceam.serratalhada.pe.gov.br', '123456', 'ATENDENTE', true)
-ON CONFLICT (email) DO NOTHING;
-
 -- Bairros de Serra Talhada
 INSERT INTO bairros (descricao, ativo) SELECT 'Centro', true WHERE NOT EXISTS (SELECT 1 FROM bairros WHERE descricao = 'Centro');
 INSERT INTO bairros (descricao, ativo) SELECT 'Bom Jesus', true WHERE NOT EXISTS (SELECT 1 FROM bairros WHERE descricao = 'Bom Jesus');

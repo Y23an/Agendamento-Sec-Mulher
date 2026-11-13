@@ -1,58 +1,79 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext(null);
 
+function lerExp(token) {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(b64));
+    return exp ? exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function lerSessao() {
+  const token = localStorage.getItem('ceam_token');
+  if (!token || lerExp(token) <= Date.now()) {
+    localStorage.removeItem('ceam_token');
+    localStorage.removeItem('ceam_user');
+    return { token: null, user: null };
+  }
+  try {
+    return { token, user: JSON.parse(localStorage.getItem('ceam_user')) };
+  } catch {
+    return { token, user: null };
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('ceam_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [token, setToken] = useState(() => localStorage.getItem('ceam_token'));
+  const [sessao, setSessao] = useState(lerSessao);
   const [loading, setLoading] = useState(false);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('ceam_token');
+    localStorage.removeItem('ceam_user');
+    setSessao({ token: null, user: null });
+  }, []);
+
+  // encerra a sessão sozinha quando o token expira
+  useEffect(() => {
+    if (!sessao.token) return;
+    const ms = lerExp(sessao.token) - Date.now();
+    if (ms <= 0) { logout(); return; }
+    const id = setTimeout(logout, Math.min(ms, 2 ** 31 - 1));
+    return () => clearTimeout(id);
+  }, [sessao.token, logout]);
 
   const login = async (email, senha) => {
     setLoading(true);
     try {
-      // Tentativa de chamada real à API
-      const response = await api.post('/api/v1/auth/login', { email, senha });
-      const { token: jwtToken, usuario } = response.data;
-      
-      localStorage.setItem('ceam_token', jwtToken);
-      localStorage.setItem('ceam_user', JSON.stringify(usuario));
-      setToken(jwtToken);
-      setUser(usuario);
+      const { data } = await api.post('/api/v1/auth/login', { email: email.trim(), senha });
+      localStorage.setItem('ceam_token', data.token);
+      localStorage.setItem('ceam_user', JSON.stringify(data.usuario));
+      setSessao({ token: data.token, user: data.usuario });
       return { success: true };
     } catch (err) {
-      // Fallback para login de demonstração se a API ainda não tiver o endpoint pronto
-      if (email && senha) {
-        const mockUser = {
-          nome: email.split('@')[0],
-          email: email,
-          role: 'ADMIN',
-        };
-        const mockToken = 'mock-jwt-token-ceam-serra-talhada';
-        localStorage.setItem('ceam_token', mockToken);
-        localStorage.setItem('ceam_user', JSON.stringify(mockUser));
-        setToken(mockToken);
-        setUser(mockUser);
-        return { success: true, isMock: true };
-      }
-      return { success: false, error: err.response?.data?.message || 'Falha ao autenticar' };
+      let error = 'Não foi possível conectar ao servidor.';
+      if (err.response?.status === 401) error = err.response.data?.message || 'E-mail ou senha inválidos.';
+      else if (err.response?.status === 400) error = 'Informe um e-mail e uma senha válidos.';
+      else if (err.response) error = 'Erro no servidor. Tente novamente.';
+      return { success: false, error };
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('ceam_token');
-    localStorage.removeItem('ceam_user');
-    setToken(null);
-    setUser(null);
-  };
-
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, logout, loading }}>
+    <AuthContext.Provider value={{
+      user: sessao.user,
+      token: sessao.token,
+      isAuthenticated: !!sessao.token,
+      login,
+      logout,
+      loading,
+    }}>
       {children}
     </AuthContext.Provider>
   );

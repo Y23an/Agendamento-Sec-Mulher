@@ -5,6 +5,7 @@ import br.gov.pe.serratalhada.ceam.repository.UsuarioRepository;
 import br.gov.pe.serratalhada.ceam.web.dto.AlterarSenhaRequest;
 import br.gov.pe.serratalhada.ceam.web.dto.UsuarioResponse;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,9 +17,11 @@ import java.util.stream.Collectors;
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UsuarioService(UsuarioRepository usuarioRepository) {
+    public UsuarioService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
         this.usuarioRepository = usuarioRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -37,11 +40,14 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado."));
 
-        if (!usuario.getSenha().equals(request.senhaAtual())) {
+        if (!passwordEncoder.matches(request.senhaAtual(), usuario.getSenha())) {
             throw new IllegalArgumentException("Senha atual incorreta.");
         }
+        if (passwordEncoder.matches(request.novaSenha(), usuario.getSenha())) {
+            throw new IllegalArgumentException("A nova senha deve ser diferente da atual.");
+        }
 
-        usuario.setSenha(request.novaSenha());
+        usuario.setSenha(passwordEncoder.encode(request.novaSenha()));
         usuarioRepository.save(usuario);
     }
 

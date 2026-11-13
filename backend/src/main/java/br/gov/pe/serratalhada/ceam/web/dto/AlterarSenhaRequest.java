@@ -5,6 +5,6 @@ import jakarta.validation.constraints.Size;
 
 public record AlterarSenhaRequest(
     @NotBlank String senhaAtual,
-    @NotBlank @Size(min = 6, message = "A nova senha deve ter pelo menos 6 caracteres") String novaSenha,
+    @NotBlank @Size(min = 8, message = "A nova senha deve ter pelo menos 8 caracteres") String novaSenha,
     @NotBlank String confirmarSenha
 ) {}
